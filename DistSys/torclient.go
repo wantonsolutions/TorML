@@ -3,64 +3,66 @@ package main
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/binary"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"math"
 	"net"
 	"os"
-	"time"
 	"strconv"
 	"strings"
-	"golang.org/x/net/proxy"
+	"time"
+
 	"github.com/DistributedClocks/GoVector/govec"
 	"github.com/sbinet/go-python"
+	"golang.org/x/net/proxy"
 )
 
 /*
-	An attempt at Tor via TCP. 
+	An attempt at Tor via TCP.
 */
-var LOCAL_HOST 		string = "127.0.0.1:"
-var ONION_HOST 		string = "4255ru2izmph3efw.onion:"
-var CONTROL_PORT 	int    = 5005
-var TOR_PROXY 		string = "127.0.0.1:9150"
+var LOCAL_HOST string = "127.0.0.1:"
+
+//var ONION_HOST 		string = "4255ru2izmph3efw.onion:"
+var ONION_HOST string = "33bwoexeu3sjrxoe.onion:"
+var CONTROL_PORT int = 5005
+
+//var TOR_PROXY string = "127.0.0.1:9050"
+var TOR_PROXY string = "127.0.0.1:9150"
 
 type MessageData struct {
-	Type   		  string
-	SourceNode    string
-	ModelId       string
-	Key           string
-	NumFeatures   int
-	MinClients    int
+	Type        string
+	SourceNode  string
+	ModelId     string
+	Key         string
+	NumFeatures int
+	MinClients  int
 }
 
 // Schema for data used in gradient updates
 type GradientData struct {
-	ModelId 	  string
-	Key			  string
-	Deltas 		  []float64
+	ModelId string
+	Key     string
+	Deltas  []float64
 }
 
 var (
-	
-	name 			string
-	modelName  		string
-	datasetName 	string
-	numFeatures     int
-	minClients      int
-	isLocal			bool
-	puzzleKey		string
-	pulledGradient  []float64
-	torHost			string
-	torAddress		string
+	name           string
+	modelName      string
+	datasetName    string
+	numFeatures    int
+	minClients     int
+	isLocal        bool
+	puzzleKey      string
+	pulledGradient []float64
+	torHost        string
+	torAddress     string
 
-	pyLogModule       *python.PyObject
-	pyLogInitFunc     *python.PyObject
-	pyLogPrivFunc     *python.PyObject
-	pyNumFeatures     *python.PyObject
-	
-
+	pyLogModule   *python.PyObject
+	pyLogInitFunc *python.PyObject
+	pyLogPrivFunc *python.PyObject
+	pyNumFeatures *python.PyObject
 )
 
 func init() {
@@ -79,13 +81,14 @@ func pyInit(datasetName string) {
 	pyLogModule = python.PyImport_ImportModule("logistic_model")
 	pyLogInitFunc = pyLogModule.GetAttrString("init")
 	pyLogPrivFunc = pyLogModule.GetAttrString("privateFun")
+
 	pyNumFeatures = pyLogInitFunc.CallFunction(python.PyString_FromString(datasetName))
 
-  	numFeatures = python.PyInt_AsLong(pyNumFeatures)
-  	minClients = 5
-  	pulledGradient = make([]float64, numFeatures)
+	numFeatures = python.PyInt_AsLong(pyNumFeatures)
+	minClients = 5
+	pulledGradient = make([]float64, numFeatures)
 
-  	fmt.Printf("Sucessfully pulled dataset. Features: %d\n", numFeatures)
+	fmt.Printf("Sucessfully pulled dataset. Features: %d\n", numFeatures)
 
 }
 
@@ -99,21 +102,21 @@ func main() {
 	pyInit(datasetName)
 
 	fmt.Printf("Joining model %s \n", modelName)
-  	joined := sendJoinMessage(logger, torDialer)
+	joined := sendJoinMessage(logger, torDialer)
 
-  	if joined == 0 {
-  		fmt.Println("Could not join.")
-  		return
-  	}
-  	
-  	sendGradMessage(logger, torDialer, pulledGradient, true)
+	if joined == 0 {
+		fmt.Println("Could not join.")
+		return
+	}
 
-  	for i := 0; i < 200000; i++ { 
-    	sendGradMessage(logger, torDialer, pulledGradient, false)
-  	}
+	sendGradMessage(logger, torDialer, pulledGradient, true)
 
-  	heartbeat(logger, torDialer)
-  	fmt.Println("The end")
+	for i := 0; i < 200000; i++ {
+		sendGradMessage(logger, torDialer, pulledGradient, false)
+	}
+
+	heartbeat(logger, torDialer)
+	fmt.Println("The end")
 
 }
 
@@ -121,7 +124,7 @@ func heartbeat(logger *govec.GoLog, torDialer proxy.Dialer) {
 
 	for {
 
-		time.Sleep(30 * time.Second)		
+		time.Sleep(30 * time.Second)
 
 		conn, err := getServerConnection(torDialer, false)
 		if err != nil {
@@ -138,14 +141,14 @@ func heartbeat(logger *govec.GoLog, torDialer proxy.Dialer) {
 		msg.MinClients = minClients
 
 		outBuf := logger.PrepareSend("Sending packet to torserver", msg)
-		
+
 		_, err = conn.Write(outBuf)
 		if err != nil {
 			fmt.Println("Got a Conn Write failure, retrying...")
 			conn.Close()
 			continue
 		}
-		
+
 		inBuf := make([]byte, 512)
 		n, errRead := conn.Read(inBuf)
 		if errRead != nil {
@@ -160,19 +163,17 @@ func heartbeat(logger *govec.GoLog, torDialer proxy.Dialer) {
 		fmt.Println("Send heartbeat success")
 		conn.Close()
 
-	}	
+	}
 
 }
 
 func parseArgs() {
-
 	flag.Parse()
 	inputargs := flag.Args()
 	if len(inputargs) < 3 {
 		fmt.Println("USAGE: go run torclient.go nodeName studyName datasetName isLocal")
 		os.Exit(1)
 	}
-	
 	name = inputargs[0]
 	modelName = inputargs[1]
 	datasetName = inputargs[2]
@@ -201,17 +202,18 @@ func getTorDialer() proxy.Dialer {
 	torDialer, err := proxy.SOCKS5("tcp", TOR_PROXY, nil, proxy.Direct)
 	checkError(err)
 	return torDialer
+
 }
 
-func sendGradMessage(logger *govec.GoLog, 
-	torDialer proxy.Dialer, 
-	globalW []float64, 
+func sendGradMessage(logger *govec.GoLog,
+	torDialer proxy.Dialer,
+	globalW []float64,
 	bootstrapping bool) int {
-	
+
 	completed := false
 
 	// prevents the screen from overflowing and freezing
-	time.Sleep(100 * time.Millisecond)		
+	time.Sleep(100 * time.Millisecond)
 
 	for !completed {
 
@@ -241,14 +243,14 @@ func sendGradMessage(logger *govec.GoLog,
 		}
 
 		outBuf := logger.PrepareSend("Sending packet to torserver", msg)
-		
+
 		_, err = conn.Write(outBuf)
 		if err != nil {
 			fmt.Println("Got a conn write failure, retrying...")
 			conn.Close()
 			continue
 		}
-		
+
 		inBuf := make([]byte, 2048)
 		n, errRead := conn.Read(inBuf)
 		if errRead != nil {
@@ -263,7 +265,7 @@ func sendGradMessage(logger *govec.GoLog,
 		conn.Close()
 
 		pulledGradient = incomingMsg
-		if (len(incomingMsg) > 0) {
+		if len(incomingMsg) > 0 {
 			completed = true
 		} else {
 			time.Sleep(1 * time.Second)
@@ -286,7 +288,7 @@ func getServerConnection(torDialer proxy.Dialer, isGradient bool) (net.Conn, err
 		} else {
 			conn, err = torDialer.Dial("tcp", constructAddress(ONION_HOST, CONTROL_PORT))
 		}
-	
+
 	} else {
 		conn, err = net.Dial("tcp", LOCAL_HOST)
 	}
@@ -303,23 +305,23 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 	fmt.Println("TOR Dial Success!")
 
 	var msg MessageData
-    msg.Type = "join"
-    msg.SourceNode = name
-    msg.ModelId = modelName
-    msg.Key = ""
-    msg.NumFeatures = numFeatures
-    msg.MinClients = minClients
+	msg.Type = "join"
+	msg.SourceNode = name
+	msg.ModelId = modelName
+	msg.Key = ""
+	msg.NumFeatures = numFeatures
+	msg.MinClients = minClients
 
-    outBuf := logger.PrepareSend("Sending packet to torserver", msg)
-    	
+	outBuf := logger.PrepareSend("Sending packet to torserver", msg)
+
 	_, errWrite := conn.Write(outBuf)
 	checkError(errWrite)
-	
+
 	inBuf := make([]byte, 512)
 	n, errRead := conn.Read(inBuf)
 	checkError(errRead)
 
-	var puzzle string 
+	var puzzle string
 	var solution string
 	var solved bool
 	logger.UnpackReceive("Received puzzle from server", inBuf[0:n], &puzzle)
@@ -335,14 +337,14 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 		timeHash.Write([]byte(time.Now().String()))
 
 		solution = hex.EncodeToString(timeHash.Sum(nil))
-	    h.Write([]byte(solution))
+		h.Write([]byte(solution))
 
-	    hashed := hex.EncodeToString(h.Sum(nil))
-	    fmt.Println(hashed)
+		hashed := hex.EncodeToString(h.Sum(nil))
+		//fmt.Println(hashed)
 
 		if strings.HasSuffix(hashed, "0000") {
-		    fmt.Println("BINGO!")
-		    solved = true
+			fmt.Println("BINGO!")
+			solved = true
 		}
 
 	}
@@ -351,14 +353,14 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 	checkError(err)
 
 	msg.Type = "solve"
-	msg.Key = solution  
+	msg.Key = solution
 
 	fmt.Printf("Sending solution: %s\n", solution)
 
 	outBuf = logger.PrepareSend("Sending puzzle solution", msg)
 	_, errWrite = conn.Write(outBuf)
 	checkError(errWrite)
-	
+
 	inBuf = make([]byte, 512)
 	n, errRead = conn.Read(inBuf)
 	checkError(errRead)
@@ -390,7 +392,7 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 }
 
 func oneGradientStep(globalW []float64) ([]float64, error) {
-	
+
 	argArray := python.PyList_New(len(globalW))
 
 	for i := 0; i < len(globalW); i++ {
@@ -400,7 +402,7 @@ func oneGradientStep(globalW []float64) ([]float64, error) {
 	// Either use full GD or SGD here
 	result := pyLogPrivFunc.CallFunction(python.PyInt_FromLong(1), argArray,
 		python.PyInt_FromLong(10))
-	
+
 	// Convert the resulting array to a go byte array
 	pyByteArray := python.PyByteArray_FromObject(result)
 	goByteArray := python.PyByteArray_AsBytes(pyByteArray)
@@ -414,7 +416,7 @@ func oneGradientStep(globalW []float64) ([]float64, error) {
 		aFloat := math.Float64frombits(bits)
 		goFloatArray = append(goFloatArray, aFloat)
 	}
-	
+
 	return goFloatArray, nil
 }
 

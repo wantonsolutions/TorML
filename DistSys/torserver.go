@@ -15,70 +15,70 @@ import (
 	"strings"
 	"sync"
 	"time"
+
 	"github.com/DistributedClocks/GoVector/govec"
-	"github.com/sbinet/go-python"
 	"github.com/gonum/matrix/mat64"
+	"github.com/sbinet/go-python"
 )
 
 type MessageData struct {
-	Type 		  string
-	SourceNode    string
-	ModelId       string
-	Key 		  string
-	NumFeatures   int
-	MinClients    int
+	Type        string
+	SourceNode  string
+	ModelId     string
+	Key         string
+	NumFeatures int
+	MinClients  int
 }
 
 // Schema for data used in gradient updates
 type GradientData struct {
-	ModelId 	  string
-	Key			  string
-	Deltas 		  []float64
+	ModelId string
+	Key     string
+	Deltas  []float64
 }
 
 type ClientState struct {
-	NumIterations		int
-	NumValidations      int
-	IsComputingLocal 	bool
-	Weights 			[]float64
-	OutlierScore		float64
-	Work 				[][]float64
+	NumIterations    int
+	NumValidations   int
+	IsComputingLocal bool
+	Weights          []float64
+	OutlierScore     float64
+	Work             [][]float64
 }
 
 // An active model: list of participants and weights
 type Model struct {
 	// Model based parameters: dimensions, w*
-	NumFeatures 		int
-	GlobalWeights 		[]float64
+	NumFeatures   int
+	GlobalWeights []float64
 
 	// Bookkeeping
-	Puzzles				map[string]string
-	Clients 	 		map[string]ClientState
-	MinClients 			int
+	Puzzles    map[string]string
+	Clients    map[string]ClientState
+	MinClients int
 }
 
 type Validator struct {
-	IsValidating		bool
-	NumResponses		int
-	ClientResponses 	map[string][]float64
-	ValidationModel		[]float64
+	IsValidating    bool
+	NumResponses    int
+	ClientResponses map[string][]float64
+	ValidationModel []float64
 }
 
 var (
-	
-	mutex 				*sync.Mutex
+	mutex *sync.Mutex
 
-	myPorts				map[int]bool
-	myModels 			map[string]Model
-	myValidators	 	map[string]Validator
+	myPorts      map[int]bool
+	myModels     map[string]Model
+	myValidators map[string]Validator
 
-	MULTICAST_RATE		float64 = 0.8
-	THRESHOLD			float64 = 0.005
+	MULTICAST_RATE float64 = 0.8
+	THRESHOLD      float64 = 0.005
 
 	// Test Module for python
-	testModule  *python.PyObject
-	testFunc    *python.PyObject
-	trainFunc   *python.PyObject
+	testModule *python.PyObject
+	testFunc   *python.PyObject
+	trainFunc  *python.PyObject
 )
 
 /*
@@ -87,81 +87,80 @@ var (
 func handler(w http.ResponseWriter, r *http.Request) {
 
 	req := r.URL.Path[1:]
-    
-    fmt.Fprintf(w, "Welcome %s!\n\n", r.URL.Path[1:])
 
-    model, exists := myModels[req]
-    
-    if exists {
+	fmt.Fprintf(w, "Welcome %s!\n\n", r.URL.Path[1:])
 
-    	train_error, test_error := testModel(model, "global")
-    	fmt.Fprintf(w, "Train Loss: %f\n", train_error)	
-    	fmt.Fprintf(w, "Test Loss: %f\n", test_error)	
+	model, exists := myModels[req]
 
-    	for node, clientState := range model.Clients {
-    	
-    		fmt.Fprintf(w, "\n");	
-    		train_error, test_error = testModel(model, node)
-    		fmt.Fprintf(w, "%s iterations: %d\n", node, clientState.NumIterations)
-    		fmt.Fprintf(w, "%s validations: %d\n", node, clientState.NumValidations)
-    		fmt.Fprintf(w, "%s L2 outlier score: %f\n", node, clientState.OutlierScore)	
-    		fmt.Fprintf(w, "%s train Loss: %f\n", node, train_error)	
-    		fmt.Fprintf(w, "%s test Loss: %f\n", node, test_error)	
-    	
-    	}
-    }
+	if exists {
 
-    if req == "flush" {
-    
-    	file, err := os.Create("models.csv")
-    	checkError(err)
-    	defer file.Close()
+		train_error, test_error := testModel(model, "global")
+		fmt.Fprintf(w, "Train Loss: %f\n", train_error)
+		fmt.Fprintf(w, "Test Loss: %f\n", test_error)
 
-    	writer := csv.NewWriter(file)
-    	defer writer.Flush()
+		for node, clientState := range model.Clients {
 
-    	for _, model := range myModels {
+			fmt.Fprintf(w, "\n")
+			train_error, test_error = testModel(model, node)
+			fmt.Fprintf(w, "%s iterations: %d\n", node, clientState.NumIterations)
+			fmt.Fprintf(w, "%s validations: %d\n", node, clientState.NumValidations)
+			fmt.Fprintf(w, "%s L2 outlier score: %f\n", node, clientState.OutlierScore)
+			fmt.Fprintf(w, "%s train Loss: %f\n", node, train_error)
+			fmt.Fprintf(w, "%s test Loss: %f\n", node, test_error)
 
-    		st := strings.Fields(strings.Trim(fmt.Sprint(model.GlobalWeights), "[]"))
-    		writer.Write(st)
+		}
+	}
 
-    		for node, modelState := range model.Clients {
-    			st := strings.Fields(strings.Trim(fmt.Sprint(modelState.Weights), "[]"))
-    			st = append(st, node)
-    			writer.Write(st)
-    		}       
-    	}
+	if req == "flush" {
 
-    	fmt.Fprintf(w, "Model flushed.")
+		file, err := os.Create("models.csv")
+		checkError(err)
+		defer file.Close()
 
-    } else if req == "workflush" {
+		writer := csv.NewWriter(file)
+		defer writer.Flush()
 
-    	for _, model := range myModels {
+		for _, model := range myModels {
 
-    		for node, modelState := range model.Clients {
-    			
-    			file, err := os.Create("work_" + node + ".csv")
-    			checkError(err)
-    			defer file.Close()
+			st := strings.Fields(strings.Trim(fmt.Sprint(model.GlobalWeights), "[]"))
+			writer.Write(st)
 
-    			writer := csv.NewWriter(file)
-    			defer writer.Flush()
+			for node, modelState := range model.Clients {
+				st := strings.Fields(strings.Trim(fmt.Sprint(modelState.Weights), "[]"))
+				st = append(st, node)
+				writer.Write(st)
+			}
+		}
 
-    			for _, update := range modelState.Work {
+		fmt.Fprintf(w, "Model flushed.")
 
-	    			st := strings.Fields(strings.Trim(fmt.Sprint(update), "[]"))
-	    			writer.Write(st)
+	} else if req == "workflush" {
 
-    			}
+		for _, model := range myModels {
 
-    		}       
-    	}
+			for node, modelState := range model.Clients {
 
-    	fmt.Fprintf(w, "Model flushed.")
+				file, err := os.Create("work_" + node + ".csv")
+				checkError(err)
+				defer file.Close()
 
-    }
+				writer := csv.NewWriter(file)
+				defer writer.Flush()
+
+				for _, update := range modelState.Work {
+
+					st := strings.Fields(strings.Trim(fmt.Sprint(update), "[]"))
+					writer.Write(st)
+
+				}
+
+			}
+		}
+
+		fmt.Fprintf(w, "Model flushed.")
+
+	}
 }
-
 
 func httpHandler() {
 	http.HandleFunc("/", handler)
@@ -169,7 +168,6 @@ func httpHandler() {
 
 	fmt.Printf("HTTP initialized.\n")
 }
-
 
 /*
 	Automatically used by GoPython to establish function bindings
@@ -182,7 +180,7 @@ func init() {
 }
 
 /*
-	Initializes python function objects  
+	Initializes python function objects
 */
 func pyInit() {
 
@@ -200,7 +198,7 @@ func main() {
 	fmt.Println("Launching server...")
 
 	pyInit()
-	
+
 	mutex = &sync.Mutex{}
 
 	myPorts = make(map[int]bool)
@@ -208,6 +206,8 @@ func main() {
 	myValidators = make(map[string]Validator)
 
 	// Make ports 6000 to 6010 available
+	//TODO modifiy for extra VM's
+	// #Random
 	for i := 6000; i <= 6010; i++ {
 		myPorts[i] = false
 	}
@@ -216,9 +216,11 @@ func main() {
 	go httpHandler()
 
 	// setup the handler for the hidden service endpoint
-	go runRouter("127.0.0.1:5005")
+	//go runRouter("127.0.0.1:5005")
+	go runRouter("0.0.0.0:5005")
+	//go runRouter(":5005")
 
-    // Keeps server running
+	// Keeps server running
 	select {}
 }
 
@@ -251,7 +253,7 @@ func runRouter(address string) {
 		Logger.UnpackReceive("Received Message From Client", buf[0:], &inData)
 
 		outBuf = processControlMsg(inData, Logger)
-	  	conn.Write(outBuf)
+		conn.Write(outBuf)
 
 	}
 }
@@ -263,48 +265,48 @@ func processControlMsg(inData MessageData, Logger *govec.GoLog) []byte {
 
 	switch inData.Type {
 
-		// Add new nodes
-		case "join":
-			puzzle := makePuzzle(inData.ModelId)
-			outBuf = Logger.PrepareSend("Sending Puzzle", puzzle)
+	// Add new nodes
+	case "join":
+		puzzle := makePuzzle(inData.ModelId)
+		outBuf = Logger.PrepareSend("Sending Puzzle", puzzle)
 
-		// curate a new model
-		case "curator":
-			ok = startModel(inData.ModelId, inData.NumFeatures, inData.MinClients)
-			if ok {
-		  		outBuf = Logger.PrepareSend("Replying", 1)
-			} else {
-				outBuf = Logger.PrepareSend("Replying", 0)
-			}				
+	// curate a new model
+	case "curator":
+		ok = startModel(inData.ModelId, inData.NumFeatures, inData.MinClients)
+		if ok {
+			outBuf = Logger.PrepareSend("Replying", 1)
+		} else {
+			outBuf = Logger.PrepareSend("Replying", 0)
+		}
 
-		case "solve":
-			ok = processJoin(inData.SourceNode, inData.ModelId, inData.Key, inData.NumFeatures)
-			if ok {
-				address, port := getFreeAddress()
-				go gradientWorker(inData.SourceNode, address, Logger)
-		  		outBuf = Logger.PrepareSend("Replying", port)
-			} else {
-				outBuf = Logger.PrepareSend("Replying", 0)
-			}
+	case "solve":
+		ok = processJoin(inData.SourceNode, inData.ModelId, inData.Key, inData.NumFeatures)
+		if ok {
+			address, port := getFreeAddress()
+			go gradientWorker(inData.SourceNode, address, Logger)
+			outBuf = Logger.PrepareSend("Replying", port)
+		} else {
+			outBuf = Logger.PrepareSend("Replying", 0)
+		}
 
-		case "beat":
-			fmt.Printf("Heartbeat from %s\n", inData.SourceNode)
-			outBuf = Logger.PrepareSend("Replying to heartbeat", 1)
+	case "beat":
+		fmt.Printf("Heartbeat from %s\n", inData.SourceNode)
+		outBuf = Logger.PrepareSend("Replying to heartbeat", 1)
 
-		default:
-			fmt.Println("Got a message type I dont recognize.")
-			ok = false
-			outBuf = nil
-			
+	default:
+		fmt.Println("Got a message type I dont recognize.")
+		ok = false
+		outBuf = nil
+
 	}
 
 	return outBuf
 
 }
 
-func gradientWorker(nodeId string, 
-					address string, 
-					Logger *govec.GoLog) {
+func gradientWorker(nodeId string,
+	address string,
+	Logger *govec.GoLog) {
 
 	// Convert address string to net.Address
 	myaddr, err := net.ResolveTCPAddr("tcp", address)
@@ -335,10 +337,8 @@ func gradientWorker(nodeId string,
 			outBuf = Logger.PrepareSend("Replying", make([]float64, 0))
 		} else {
 
-			setUpValid := false
-
 			if rand.Float64() > MULTICAST_RATE {
-				setUpValid = true
+				startValidation(modelId)
 			}
 
 			gradientUpdate(nodeId, modelId, inData.Deltas)
@@ -346,10 +346,9 @@ func gradientWorker(nodeId string,
 			mutex.Lock()
 			clientState := myModels[modelId].Clients[nodeId]
 
-			if setUpValid {
+			if isClientValidating(modelId, nodeId) {
 				outBuf = Logger.PrepareSend("Replying", clientState.Weights)
 				clientState.IsComputingLocal = true
-				fmt.Printf("Setup Validation for %s\n", nodeId)
 			} else {
 				outBuf = Logger.PrepareSend("Replying", myModels[modelId].GlobalWeights)
 				clientState.IsComputingLocal = false
@@ -357,10 +356,10 @@ func gradientWorker(nodeId string,
 
 			myModels[modelId].Clients[nodeId] = clientState
 			mutex.Unlock()
-		
+
 		}
 
-	  	conn.Write(outBuf)
+		conn.Write(outBuf)
 
 	}
 
@@ -370,7 +369,7 @@ func testModel(model Model, node string) (float64, float64) {
 
 	var weights []float64
 	if node == "global" {
-		weights = model.GlobalWeights 
+		weights = model.GlobalWeights
 	} else {
 		weights = model.Clients[node].Weights
 	}
@@ -386,7 +385,7 @@ func testModel(model Model, node string) (float64, float64) {
 
 	train_result := trainFunc.CallFunction(argArray)
 	train_err := python.PyFloat_AsDouble(train_result)
-	
+
 	return train_err, test_err
 }
 
@@ -406,7 +405,7 @@ func startModel(modelId string, numFeatures int, minClients int) bool {
 	newModel.NumFeatures = numFeatures
 	newModel.GlobalWeights = newRandomModel(numFeatures)
 	newModel.MinClients = minClients
-	
+
 	mutex.Lock()
 	myModels[modelId] = newModel
 	mutex.Unlock()
@@ -438,15 +437,15 @@ func makePuzzle(modelId string) string {
 		fmt.Printf("Made a new puzzle for model %s\n", modelId)
 		return puzzle
 
-	} 
-	
+	}
+
 	// Return an empty string for bad join
 	fmt.Printf("Bad Puzzle request for model %s\n", modelId)
 	return ""
 
 }
 
-// numFeature is just bootleg schema validation 
+// numFeature is just bootleg schema validation
 func processJoin(node string, modelId string, givenKey string, numFeatures int) bool {
 
 	fmt.Println("Got attempted puzzle solution")
@@ -483,15 +482,15 @@ func processJoin(node string, modelId string, givenKey string, numFeatures int) 
 			hash.Write([]byte(lock))
 			hash.Write([]byte(givenKey))
 			hashString := hex.EncodeToString(hash.Sum(nil))
-			
+
 			if strings.HasSuffix(hashString, "0000") {
 
 				// Add node
-				theModel.Clients[node] = 
-					ClientState{0, 0, false, 
+				theModel.Clients[node] =
+					ClientState{0, 0, false,
 						newRandomModel(numFeatures), 0, make([][]float64, 0)}
 				fmt.Printf("Joined %s in model %s \n", node, modelId)
-				
+
 				// Write the solution
 				theModel.Puzzles[lock] = givenKey
 				myModels[modelId] = theModel
@@ -503,7 +502,7 @@ func processJoin(node string, modelId string, givenKey string, numFeatures int) 
 				fmt.Printf("Solution is not right: %s\n", givenKey)
 				fmt.Printf("Solution answer: %s\n", hashString)
 			}
-		} 
+		}
 	}
 
 	mutex.Unlock()
@@ -516,9 +515,9 @@ func gradientUpdate(nodeId string, modelId string, deltas []float64) bool {
 	if exists {
 
 		_, exists = myModels[modelId].Clients[nodeId]
-		
+
 		// Add in the deltas
-		if exists { 
+		if exists {
 
 			mutex.Lock()
 			theModel := myModels[modelId]
@@ -527,25 +526,25 @@ func gradientUpdate(nodeId string, modelId string, deltas []float64) bool {
 			if clientState.IsComputingLocal {
 
 				// Just update the local copy of the model
-				//validator := myValidators[modelId]
-				//validatorWeights := validator.ClientResponses[nodeId]
+				validator := myValidators[modelId]
+				validatorWeights := validator.ClientResponses[nodeId]
 
 				for j := 0; j < len(deltas); j++ {
-					//validatorWeights[j] = deltas[j]
+					validatorWeights[j] = deltas[j]
 					clientState.Weights[j] += deltas[j]
 				}
 
-				//validator.ClientResponses[nodeId] = validatorWeights
-				//validator.NumResponses++
+				validator.ClientResponses[nodeId] = validatorWeights
+				validator.NumResponses++
 				clientState.NumValidations++
-				//myValidators[modelId] = validator
+				myValidators[modelId] = validator
 				fmt.Printf("Validation update from %s on %s \n", nodeId, modelId)
 
-				/*if validator.NumResponses >= len(validator.ClientResponses) {
+				if validator.NumResponses >= len(validator.ClientResponses) {
 					fmt.Println("READY FOR VALIDATION MAGIC")
-					runValidation(modelId)
-					delete(myValidators, modelId) 
-				}*/
+					//runValidation(modelId)
+					delete(myValidators, modelId)
+				}
 
 				// Revert the client state
 				clientState.IsComputingLocal = false
@@ -557,14 +556,19 @@ func gradientUpdate(nodeId string, modelId string, deltas []float64) bool {
 				// Update the global model
 				for j := 0; j < len(deltas); j++ {
 					theModel.GlobalWeights[j] += deltas[j]
+					//clientState.Weights[j] += deltas[j]
 				}
-				
+
 				clientState.NumIterations++
+
+				/*if clientState.NumIterations % 10 == 0 {
+					clientState.Work = append(clientState.Work, deltas)
+				}*/
 
 				theModel.Clients[nodeId] = clientState
 				myModels[modelId] = theModel
 				fmt.Printf("Grad update from %s on %s \n", nodeId, modelId)
-							
+
 			}
 
 			// End of gradient update
@@ -589,7 +593,7 @@ func runValidation(modelId string) {
 	mutex.Lock()
 	theModel := myModels[modelId]
 	for node1, vector1 := range scores {
-		
+
 		// Sum distance between vector1 and all other vectors
 		var rollingSum float64
 		for _, vector2 := range scores {
@@ -597,7 +601,7 @@ func runValidation(modelId string) {
 		}
 
 		// Ignore distance to itself, which is always 0.
-		rollingSum /= float64(len(scores) - 1) 
+		rollingSum /= float64(len(scores) - 1)
 
 		// Normalize for number of features
 		rollingSum /= float64(myModels[modelId].NumFeatures)
@@ -608,11 +612,11 @@ func runValidation(modelId string) {
 		theModel.Clients[node1] = clientState
 
 		// save the current rolling
-		rollingAvg := rollingSum / float64(clientState.NumValidations + 1)
+		rollingAvg := rollingSum / float64(clientState.NumValidations+1)
 		fmt.Printf("Average Distance for %s: %.9f \n", node1, rollingAvg)
 
 		if rollingAvg > THRESHOLD {
-			fmt.Printf("node %s has average %7f over THRESHOLD %7f. KICKED! \n", 
+			fmt.Printf("node %s has average %7f over THRESHOLD %7f. KICKED! \n",
 				node1, rollingAvg, THRESHOLD)
 			kickoutNode(modelId, node1)
 		}
@@ -663,9 +667,9 @@ func startValidation(modelId string) {
 			valid.ClientResponses[node] = make([]float64, myModels[modelId].NumFeatures)
 		}
 
-		fmt.Println("Setup Validation multicast")	
+		fmt.Println("Setup Validation multicast")
 
-	} 
+	}
 
 }
 
@@ -675,7 +679,7 @@ func getFreeAddress() (string, int) {
 
 	mutex.Lock()
 	for port := range myPorts {
-		
+
 		if !myPorts[port] {
 
 			// Mark port as taken
@@ -688,17 +692,17 @@ func getFreeAddress() (string, int) {
 			return buffer.String(), port
 		}
 	}
-	
+
 	mutex.Unlock()
 	return "", 0
 }
 
 func isClientValidating(modelId string, node string) bool {
-	
+
 	_, exists := myValidators[modelId]
-	
+
 	// Short circuit?
-	return exists && 
+	return exists &&
 		myValidators[modelId].IsValidating &&
 		myModels[modelId].Clients[node].IsComputingLocal
 
@@ -715,9 +719,8 @@ func newRandomModel(numFeatures int) []float64 {
 	return model
 }
 
-
 func FindEucDistance(vectorX *mat64.Dense, vectorY *mat64.Dense) float64 {
-	
+
 	// Finds X-Y
 	distanceVec := mat64.NewDense(0, 0, nil)
 	distanceVec.Sub(vectorX, vectorY)
