@@ -40,7 +40,7 @@ echo "export PATH=$PATH:$GOPATH/bin" >> .profile
 echo "Installing TorML"
 #go get github.com/DistributedML/TorML
 #TEMP
-go get github.com/Wantonsolutions/TorML
+go get github.com/wantonsolutions/TorML
 #Install dependencies
 echo "Installing Dependencies"
 echo "DistributedClocks..."
