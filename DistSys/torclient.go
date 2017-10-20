@@ -200,6 +200,13 @@ func getTorDialer() proxy.Dialer {
 	if isLocal {
 		return nil
 	}
+	// Create proxy dialer using Tor SOCKS proxy via browser socket
+	torDialerCLI, errCLI := proxy.SOCKS5("tcp", TOR_PROXY_CLI, nil, proxy.Direct)
+	if errCLI != nil {
+		fmt.Printf("Unable to connect to TOR via CLI gateway %s\n", errCLI.Error())
+	} else {
+		return torDialerCLI
+	}
 
 	// Create proxy dialer using Tor SOCKS proxy via browser socket
 	torDialerBrowser, errBrowser := proxy.SOCKS5("tcp", TOR_PROXY_BROWSER, nil, proxy.Direct)
@@ -209,13 +216,6 @@ func getTorDialer() proxy.Dialer {
 		return torDialerBrowser
 	}
 
-	// Create proxy dialer using Tor SOCKS proxy via browser socket
-	torDialerCLI, errCLI := proxy.SOCKS5("tcp", TOR_PROXY_CLI, nil, proxy.Direct)
-	if errCLI != nil {
-		fmt.Printf("Unable to connect to TOR via CLI gateway %s\n", errCLI.Error())
-	} else {
-		return torDialerCLI
-	}
 	checkError(fmt.Errorf("Unable to connect through BROWSER %s \n or CLI %s\n", errBrowser.Error(), errCLI.Error()))
 	return nil
 
