@@ -1,22 +1,38 @@
 #!/bin/bash -ex
 
-vms[0]=40.86.185.245
+declare -A vms
 
+username='stewbertgrant'
 bootstrap='rm TorMentorAzureInstall.sh; wget https://raw.githubusercontent.com/wantonsolutions/TorML/master/evaluation/TorMentorAzureInstall.sh; chmod 755 TorMentorAzureInstall.sh; sudo sh -c "yes | ./TorMentorAzureInstall.sh"'
-pingcommand='ping -c 5 198.162.52.147 | tail -1 | cut -d / -f 5 > $HOSTNAME.ping'
-pinglocation="/home/stew/*ping"
+firstcommand='echo hello $HOSTNAME'
+pingcommand='ping -c 1 198.162.52.147 | tail -1 | cut -d / -f 5 > $HOSTNAME.ping'
+pinglocation="/home/stewbertgrant/*ping"
 
 sysdir='go/src/github.com/wantonsolutions/TorML/DistSys/'
 
-runclient='tor & sleep 3;cd go/src/github.com/wantonsolutions/TorML/DistSys/; go build torclient.go; ./torclient $HOSTNAME models credit1'
+runclient='killall tor; tor & sleep 3;cd go/src/github.com/wantonsolutions/TorML/DistSys/; go build torclient.go; ./torclient $HOSTNAME models credit1'
 
 pull='cd go/src/github.com/wantonsolutions/TorML/DistSys/; git pull'
+
+## $1 is the filename to read vms from
+function readVMs {
+IFS=$'\n'
+set -f
+    for line in $(cat $1);do
+        vmname=`echo $line | cut -d, -f1`
+        vmpubip=`echo $line | cut -d, -f2`
+        vms["$vmname"]="$vmpubip"
+    done
+echo ${vms[@]}
+}
+
 
 function onall {
     echo running $1
     for vm in ${vms[@]}
     do
-        ssh stew@$vm -x $1 
+        ssh $username@$vm -x $1 
+        break
     done
 }
 
@@ -24,7 +40,7 @@ function onallasync {
     echo running $1
     for vm in ${vms[@]}
     do
-        ssh stew@$vm -x $1 &
+        ssh $username@$vm -x $1 &
     done
 }
 
@@ -32,13 +48,35 @@ function getall {
     echo grabbing $1
     for vm in ${vms[@]}
     do
-        scp stew@$vm:$1 $2
+        scp $username@$vm:$1 $2
+    done
+}
+function getallasync {
+    echo grabbing $1
+    for vm in ${vms[@]}
+    do
+        scp $username@$vm:$1 $2 &
     done
 }
 
+function getPings {
+    onallasync "$pingcommand"
+    sleep 10
+    #onall "$runclient"
+    getallasync "$pinglocation" ./
+    sleep 10
+    cat *.ping > agg.ping
+    mkdir ping
+    mv *.ping ping/
+}
 
+readVMs nameip.txt
+#getPings
 #onall "$bootstrap"
-onall "$pull"
-onall "$pingcommand"
 onall "$runclient"
-getall "$pinglocation" ./
+#onall "$pull"
+#onall "$firstcommand"
+#onall "$pingcommand"
+#sleep 10
+#onall "$runclient"
+#getall "$pinglocation" ./
