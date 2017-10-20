@@ -18,7 +18,7 @@ CLIENTS=2
 
 go run torserver.go &
 
-sleep 3
+sleep 5
 
 go run torcurator.go c1 models
 
