@@ -12,9 +12,9 @@ import (
 
 var LOCAL_HOST string = "127.0.0.1:5005"
 var ONION_HOST string = "33bwoexeu3sjrxoe.onion:5005"
-var TOR_PROXY string = "127.0.0.1:9150"
 
-//var TOR_PROXY string = "198.162.52.147:9050"
+var TOR_PROXY_CLI string = "127.0.0.1:9050"
+var TOR_PROXY_BROWSER string = "127.0.0.1:9150"
 
 var (
 	name      string
@@ -32,7 +32,6 @@ type MessageData struct {
 }
 
 func main() {
-
 	parseArgs()
 	logger := govec.InitGoVector(name, name)
 	torDialer := getTorDialer()
@@ -61,16 +60,30 @@ func parseArgs() {
 
 }
 
+//Todo this is duplicated on curator and client
 func getTorDialer() proxy.Dialer {
 
 	if isLocal {
 		return nil
 	}
 
-	// Create proxy dialer using Tor SOCKS proxy
-	torDialer, err := proxy.SOCKS5("tcp", TOR_PROXY, nil, proxy.Direct)
-	checkError(err)
-	return torDialer
+	// Create proxy dialer using Tor SOCKS proxy via browser socket
+	torDialerBrowser, errBrowser := proxy.SOCKS5("tcp", TOR_PROXY_BROWSER, nil, proxy.Direct)
+	if errBrowser != nil {
+		fmt.Printf("Unable to connect to TOR via Browser gateway %s\n", errBrowser.Error())
+	} else {
+		return torDialerBrowser
+	}
+
+	// Create proxy dialer using Tor SOCKS proxy via browser socket
+	torDialerCLI, errCLI := proxy.SOCKS5("tcp", TOR_PROXY_CLI, nil, proxy.Direct)
+	if errCLI != nil {
+		fmt.Printf("Unable to connect to TOR via CLI gateway %s\n", errCLI.Error())
+	} else {
+		return torDialerCLI
+	}
+	checkError(fmt.Errorf("Unable to connect through BROWSER %s \n or CLI %s\n", errBrowser.Error(), errCLI.Error()))
+	return nil
 
 }
 

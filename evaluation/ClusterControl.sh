@@ -10,7 +10,14 @@ pinglocation="/home/stewbertgrant/*ping"
 
 sysdir='go/src/github.com/wantonsolutions/TorML/DistSys/'
 
-runclient='killall tor; tor & sleep 3;cd go/src/github.com/wantonsolutions/TorML/DistSys/; go build torclient.go; ./torclient $HOSTNAME models credit1'
+runclient='export GOPATH=$HOME/go
+           export PATH=$PATH:$GOPATH/bin;
+           export PATH=$PATH:/usr/local/go/bin;
+           killall tor;
+           tor & sleep 3;
+           cd go/src/github.com/wantonsolutions/TorML/DistSys/;
+           go run torclient.go $HOSTNAME models credit1;'
+           #./torclient $HOSTNAME models credit1'
 
 pull='cd go/src/github.com/wantonsolutions/TorML/DistSys/; git pull'
 

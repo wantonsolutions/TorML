@@ -23,7 +23,7 @@ sleep 3
 go run torcurator.go c1 models
 
 
-for (( i=1; i<CLIENTS+1; i++ ))
-do
-    go run torclient.go h$i models credit$i &
-done
+#for (( i=1; i<CLIENTS+1; i++ ))
+#do
+#    go run torclient.go h$i models credit$i &
+#done
