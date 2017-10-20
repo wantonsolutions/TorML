@@ -7,6 +7,8 @@ cd
 sudo apt-get update
 #install git
 sudo apt-get install git
+#install mercurial
+sudo apt-get install mercurial
 #download go binary
 wget https://storage.googleapis.com/golang/go1.7.4.linux-amd64.tar.gz
 
@@ -36,13 +38,22 @@ echo "export PATH=$PATH:$GOPATH/bin" >> .profile
 
 #clone the TorMentor Repository
 echo "Installing TorML"
-go get github.com/DistributedML/TorML
+#go get github.com/DistributedML/TorML
+#TEMP
+go get github.com/Wantonsolutions/TorML
 #Install dependencies
 echo "Installing Dependencies"
+echo "DistributedClocks..."
+go get github.com/DistributedClocks/GoVector
 echo "mat64..."
 go get github.com/gonum/matrix/mat64
+echo "pkg-config"
+sudo apt-get install pkg-config
 echo "go python"
 go get github.com/sbinet/go-python
+
+
+
 
 echo "installing pip"
 sudo apt install python-pip
@@ -55,6 +66,8 @@ echo "utils"
 pip install utils
 echo "pdb"
 pip install pdb
+echo "matplot-lib"
+pip install matplotlib
 
 
 #install tor

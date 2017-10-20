@@ -236,21 +236,20 @@ func runRouter(address string) {
 	ln, err := net.ListenTCP("tcp", myaddr)
 	checkError(err)
 
-	buf := make([]byte, 2048)
-	outBuf := make([]byte, 2048)
-
 	fmt.Printf("Listening for TCP....\n")
 
 	for {
 
+		buf := make([]byte, 2048)
+		outBuf := make([]byte, 2048)
 		conn, err := ln.Accept()
 		checkError(err)
 
 		// Get the message from client
-		conn.Read(buf)
+		n, _ := conn.Read(buf)
 
 		var inData MessageData
-		Logger.UnpackReceive("Received Message From Client", buf[0:], &inData)
+		Logger.UnpackReceive("Received Message From Client", buf[0:n], &inData)
 
 		outBuf = processControlMsg(inData, Logger)
 		conn.Write(outBuf)
@@ -293,8 +292,12 @@ func processControlMsg(inData MessageData, Logger *govec.GoLog) []byte {
 		fmt.Printf("Heartbeat from %s\n", inData.SourceNode)
 		outBuf = Logger.PrepareSend("Replying to heartbeat", 1)
 
+	case "ping":
+		inData.Type = "pong"
+		outBuf = Logger.PrepareSend("Ping Reply", inData)
+
 	default:
-		fmt.Println("Got a message type I dont recognize.")
+		fmt.Printf("Got a message type I dont recognize. [%s]\n", inData.Type)
 		ok = false
 		outBuf = nil
 

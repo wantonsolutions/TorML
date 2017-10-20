@@ -13,7 +13,7 @@ fi
 
 killtor
 
-CLIENTS=5
+CLIENTS=2
 
 
 go run torserver.go &
@@ -22,7 +22,6 @@ sleep 3
 
 go run torcurator.go c1 models
 
-sleep 3
 
 for (( i=1; i<CLIENTS+1; i++ ))
 do

@@ -109,6 +109,8 @@ func main() {
 		return
 	}
 
+	TorPing(logger, torDialer)
+
 	sendGradMessage(logger, torDialer, pulledGradient, true)
 
 	for i := 0; i < 200000; i++ {
@@ -434,4 +436,49 @@ func checkError(err error) {
 		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
 		os.Exit(1)
 	}
+}
+
+//Ping the tor server, write the ping out to a file called torping.out
+func TorPing(logger *govec.GoLog, torDialer proxy.Dialer) {
+	conn, err := getServerConnection(torDialer, false)
+	defer conn.Close()
+	checkError(err)
+	fmt.Println("TOR Dial Success!")
+
+	fmt.Println("Collecting Ping")
+	var msg MessageData
+	msg.Type = "ping"
+	msg.SourceNode = ""
+	msg.ModelId = ""
+	msg.Key = ""
+	msg.NumFeatures = 0
+	msg.MinClients = 0
+
+	inBuf := make([]byte, 512)
+	outBuf := logger.PrepareSend("Sending ping", msg)
+	conn.Write(outBuf)
+	start := time.Now()
+	n, errRead := conn.Read(inBuf)
+	checkError(errRead)
+	end := time.Now()
+	logger.UnpackReceive("Receving ping?", inBuf[0:n], &msg)
+	hname, _ := os.Hostname()
+	f, err := os.Create(fmt.Sprintf("%s.torping", hname))
+	defer f.Close()
+	defer f.Sync()
+	if err != nil {
+		panic(err)
+	}
+
+	if msg.Type == "pong" {
+		ping := end.Sub(start)
+		ms := fmt.Sprintf("%2.1f", float32(float32(ping.Nanoseconds())/1000000)) //I think this is right
+		fmt.Printf("Ping: %s\n", ms)
+		f.WriteString(fmt.Sprintf("%s\n", ms))
+	} else {
+		errmsg := fmt.Sprintf("Did not receive pong after ping got %s instead", msg.Type)
+		f.WriteString(errmsg)
+		panic(fmt.Errorf(errmsg))
+	}
+	return
 }
