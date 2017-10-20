@@ -10,6 +10,8 @@ sysdir='go/src/github.com/wantonsolutions/TorML/DistSys/'
 
 runclient='tor & sleep 3;cd go/src/github.com/wantonsolutions/TorML/DistSys/; go build torclient.go; ./torclient $HOSTNAME models credit1'
 
+pull='cd go/src/github.com/wantonsolutions/TorML/DistSys/; git pull'
+
 function onall {
     echo running $1
     for vm in ${vms[@]}
@@ -36,6 +38,7 @@ function getall {
 
 
 #onall "$bootstrap"
+onall "$pull"
 onall "$pingcommand"
 onall "$runclient"
 getall "$pinglocation" ./

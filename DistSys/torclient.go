@@ -28,8 +28,9 @@ var LOCAL_HOST string = "127.0.0.1:"
 var ONION_HOST string = "33bwoexeu3sjrxoe.onion:"
 var CONTROL_PORT int = 5005
 
-//var TOR_PROXY string = "127.0.0.1:9050"
-var TOR_PROXY string = "127.0.0.1:9150"
+var TOR_PROXY string = "127.0.0.1:9050"
+
+//var TOR_PROXY string = "127.0.0.1:9150"
 
 type MessageData struct {
 	Type        string
