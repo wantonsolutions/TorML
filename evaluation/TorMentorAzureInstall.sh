@@ -22,6 +22,10 @@ echo "" >> .profile
 echo "#export go path" >> .profile
 echo "export PATH=$PATH:/usr/local/go/bin" >> .profile
 
+echo "" >> .bashrc
+echo "#export go path" >> .bashrc
+echo "export PATH=$PATH:/usr/local/go/bin" >> .bashrc
+
 #make root directory and set GOPATH
 mkdir go
 export GOPATH=$HOME/go
@@ -29,11 +33,19 @@ echo "" >> .profile
 echo "#set GOPATH" >> .profile
 echo "export GOPATH=$HOME/go" >> .profile
 
+echo "" >> .profile
+echo "#set GOPATH" >> .bashrc
+echo "export GOPATH=$HOME/go" >> .bashrc
+
 #export workspace bin
 export PATH=$PATH:$GOPATH/bin
 echo "" >> .profile
 echo "#set local bin" >> .profile
 echo "export PATH=$PATH:$GOPATH/bin" >> .profile
+
+echo "" >> .bashrc
+echo "#set local bin" >> .bashrc
+echo "export PATH=$PATH:$GOPATH/bin" >> .bashrc
 #Go should be installed now
 
 #clone the TorMentor Repository
