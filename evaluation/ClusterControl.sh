@@ -7,6 +7,8 @@ bootstrap='rm TorMentorAzureInstall.sh; wget https://raw.githubusercontent.com/w
 firstcommand='echo hello $HOSTNAME'
 pingcommand='ping -c 1 198.162.52.147 | tail -1 | cut -d / -f 5 > $HOSTNAME.ping'
 pinglocation="/home/stewbertgrant/*ping"
+permission="sudo chmod -R 755 go"
+
 
 sysdir='go/src/github.com/wantonsolutions/TorML/DistSys/'
 
@@ -77,10 +79,19 @@ function getPings {
     mv *.ping ping/
 }
 
+function installAll {
+    onallasync "$bootstrap"
+}
+
+
 readVMs nameip.txt
+#installAll
 #getPings
 #onall "$bootstrap"
-onall "$runclient"
+
+onallasync "$permission"
+onallasync "$pull"
+#onallasync "$runclient"
 #onall "$pull"
 #onall "$firstcommand"
 #onall "$pingcommand"

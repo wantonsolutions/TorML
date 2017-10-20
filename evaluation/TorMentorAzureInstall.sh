@@ -3,6 +3,7 @@
 #install golang
 #go to home directory
 cd
+chmod -R ug+rw ./
 
 sudo apt-get update
 #install git
@@ -102,6 +103,8 @@ gpg --export A3C4F0F979CAA22CDBA8F512EE8CBC9E886DDD89 | sudo apt-key add -
 
 apt-get update
 apt-get install tor deb.torproject.org-keyrin
+
+sudo killall tor
 
 #give proper permissions
 cd
