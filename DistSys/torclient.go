@@ -58,6 +58,7 @@ var (
 	pulledGradient []float64
 	torHost        string
 	torAddress     string
+	epsilon        float64
 
 	pyLogModule   *python.PyObject
 	pyLogInitFunc *python.PyObject
@@ -81,8 +82,7 @@ func pyInit(datasetName string) {
 	pyLogModule = python.PyImport_ImportModule("logistic_model")
 	pyLogInitFunc = pyLogModule.GetAttrString("init")
 	pyLogPrivFunc = pyLogModule.GetAttrString("privateFun")
-
-	pyNumFeatures = pyLogInitFunc.CallFunction(python.PyString_FromString(datasetName))
+	pyNumFeatures = pyLogInitFunc.CallFunction(python.PyString_FromString(datasetName), python.PyFloat_FromDouble(epsilon))
 
 	numFeatures = python.PyInt_AsLong(pyNumFeatures)
 	minClients = 5
@@ -171,20 +171,29 @@ func heartbeat(logger *govec.GoLog, torDialer proxy.Dialer) {
 func parseArgs() {
 	flag.Parse()
 	inputargs := flag.Args()
-	if len(inputargs) < 3 {
-		fmt.Println("USAGE: go run torclient.go nodeName studyName datasetName isLocal")
+	if len(inputargs) < 4 {
+		fmt.Println("USAGE: go run torclient.go nodeName studyName datasetName epsilon isLocal")
 		os.Exit(1)
 	}
 	name = inputargs[0]
 	modelName = inputargs[1]
 	datasetName = inputargs[2]
+
+	var err error
+	epsilon, err = strconv.ParseFloat(inputargs[3], 64)
+
+	if err != nil {
+		fmt.Println("Must pass a float for epsilon.")
+		os.Exit(1)
+	}
+
 	torHost = ONION_HOST
 
 	fmt.Printf("Name: %s\n", name)
 	fmt.Printf("Study: %s\n", modelName)
 	fmt.Printf("Dataset: %s\n", datasetName)
 
-	if len(inputargs) > 3 {
+	if len(inputargs) > 4 {
 		fmt.Println("Running locally.")
 		isLocal = true
 		torHost = LOCAL_HOST
@@ -235,6 +244,7 @@ func sendGradMessage(logger *govec.GoLog,
 		conn, err := getServerConnection(torDialer, true)
 		if err != nil {
 			fmt.Println("Got a Dial failure, retrying...")
+			time.Sleep(100 * time.Millisecond)
 			continue
 		}
 
@@ -296,16 +306,14 @@ func getServerConnection(torDialer proxy.Dialer, isGradient bool) (net.Conn, err
 	var conn net.Conn
 	var err error
 
-	if torDialer != nil {
-
-		if isGradient {
-			conn, err = torDialer.Dial("tcp", torAddress)
-		} else {
-			conn, err = torDialer.Dial("tcp", constructAddress(ONION_HOST, CONTROL_PORT))
-		}
-
+	if isGradient && torDialer != nil {
+		conn, err = torDialer.Dial("tcp", torAddress)
+	} else if isGradient {
+		conn, err = net.Dial("tcp", torAddress)
+	} else if torDialer != nil {
+		conn, err = torDialer.Dial("tcp", constructAddress(ONION_HOST, CONTROL_PORT))
 	} else {
-		conn, err = net.Dial("tcp", LOCAL_HOST)
+		conn, err = net.Dial("tcp", constructAddress(LOCAL_HOST, CONTROL_PORT))
 	}
 
 	return conn, err
