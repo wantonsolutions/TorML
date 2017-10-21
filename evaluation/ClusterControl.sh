@@ -3,11 +3,16 @@
 declare -A vms
 
 username='stewbertgrant'
-bootstrap='rm TorMentorAzureInstall.sh; wget https://raw.githubusercontent.com/wantonsolutions/TorML/master/evaluation/TorMentorAzureInstall.sh; chmod 755 TorMentorAzureInstall.sh; sudo sh -c "yes | ./TorMentorAzureInstall.sh"'
+
+bootstrap='rm TorMentorAzureInstall.sh;
+           wget https://raw.githubusercontent.com/wantonsolutions/TorML/master/evaluation/TorMentorAzureInstall.sh;
+           chmod 755 TorMentorAzureInstall.sh;
+           sudo sh -c "yes | ./TorMentorAzureInstall.sh"'
+
 firstcommand='echo hello $HOSTNAME'
 pingcommand='ping -c 1 198.162.52.147 | tail -1 | cut -d / -f 5 > $HOSTNAME.ping'
 pinglocation="/home/stewbertgrant/*ping"
-permission="sudo chmod -R 755 go"
+permission="sudo chown -R stewbertgrant go"
 
 
 sysdir='go/src/github.com/wantonsolutions/TorML/DistSys/'
@@ -16,12 +21,14 @@ runclient='export GOPATH=$HOME/go
            export PATH=$PATH:$GOPATH/bin;
            export PATH=$PATH:/usr/local/go/bin;
            killall tor;
-           tor & sleep 3;
+           tor & sleep 10;
            cd go/src/github.com/wantonsolutions/TorML/DistSys/;
            go run torclient.go $HOSTNAME models credit1;'
            #./torclient $HOSTNAME models credit1'
 
 pull='cd go/src/github.com/wantonsolutions/TorML/DistSys/; git pull'
+
+killeverything='killall torserver; killall torclient'
 
 ## $1 is the filename to read vms from
 function readVMs {
@@ -35,6 +42,12 @@ set -f
 echo ${vms[@]}
 }
 
+function yeshello {
+    for vm in ${vms[@]}
+    do
+        ssh $username@$vm -oStrictHostKeyChecking=no -x 'echo $HOSTNAME'
+    done
+}
 
 function onall {
     echo running $1
@@ -83,16 +96,22 @@ function installAll {
     onallasync "$bootstrap"
 }
 
+function killAll {
+    onallasync "$killeverything"
+}
+
 
 readVMs nameip.txt
+killAll
+#onallasync "$runclient"
+#yeshello
 #installAll
 #getPings
 #onall "$bootstrap"
 
-onallasync "$permission"
-onallasync "$pull"
-#onallasync "$runclient"
-#onall "$pull"
+#onallasync "$pull"
+#onallasync "$permission"
+#onallasync "$pull"
 #onall "$firstcommand"
 #onall "$pingcommand"
 #sleep 10

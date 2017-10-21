@@ -3,7 +3,7 @@
 #install golang
 #go to home directory
 cd
-chmod -R ug+rw ./
+chmod -R ug+rw go/
 
 sudo apt-get update
 #install git
@@ -108,5 +108,5 @@ sudo killall tor
 
 #give proper permissions
 cd
-chmod -R ug+rw ./
+chmod -R ug+rw go
 
