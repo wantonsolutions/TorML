@@ -43,7 +43,7 @@ type ClientState struct {
 	IsComputingLocal bool
 	Weights          []float64
 	OutlierScore     float64
-	Work             [][]float64
+	Work             []float64
 }
 
 // An active model: list of participants and weights
@@ -210,7 +210,7 @@ func main() {
 	// Make ports 6000 to 6010 available
 	//TODO modifiy for extra VM's
 	// #Random
-	for i := 6000; i <= 6010; i++ {
+	for i := 6000; i <= 6100; i++ {
 		myPorts[i] = false
 	}
 
@@ -281,7 +281,7 @@ func processControlMsg(inData MessageData, Logger *govec.GoLog) []byte {
 		}
 
 	case "solve":
-		ok = processJoin(inData.SourceNode, inData.ModelId, inData.Key, inData.NumFeatures)
+		ok = processJoin(inData.ModelId, inData.Key, inData.NumFeatures)
 		if ok {
 			address, port := getFreeAddress()
 			go gradientWorker(inData.SourceNode, address, Logger)
