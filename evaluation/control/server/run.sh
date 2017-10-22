@@ -9,5 +9,6 @@ samplerate=$2
 
 cd ~/go/src/github.com/wantonsolutions/TorML/DistSys/
 
-go run torserver.go $threshold $samplerate &
+gnome-terminal -x go run torserver.go $threshold $samplerate > serverlog.sh
+
 

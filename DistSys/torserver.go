@@ -88,6 +88,8 @@ var (
 	Executes when the .onion domain is accessed via the TorBrowser
 */
 func handler(w http.ResponseWriter, r *http.Request) {
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	req := r.URL.Path[1:]
 

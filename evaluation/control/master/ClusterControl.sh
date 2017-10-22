@@ -13,6 +13,7 @@ bootstrap='rm TorMentorAzureInstall.sh;
 firstcommand='echo hello $HOSTNAME'
 pingcommand='ping -c 1 198.162.52.147 | tail -1 | cut -d / -f 5 > $HOSTNAME.ping'
 pinglocation="/home/stewbertgrant/*ping"
+torpinglocation="/home/stewbertgrant/go/src/github.com/wantonsolutions/TorML/DistSys/*torping"
 permission="sudo chown -R stewbertgrant go"
 
 
@@ -32,13 +33,14 @@ killeverything='killall torserver; killall torclient; killall torcurator'
 ## $1 is the filename to read vms from
 function readVMs {
 IFS=$'\n'
-set -f
+#set -f
     for line in $(cat $1);do
         vmname=`echo $line | cut -d, -f1`
         vmpubip=`echo $line | cut -d, -f2`
         vms["$vmname"]="$vmpubip"
     done
 echo ${vms[@]}
+IFS=$' \t\n'
 }
 
 function yeshello {
@@ -83,13 +85,20 @@ function getallasync {
 function getPings {
     onallasync "$pingcommand"
     sleep 10
-    #onall "$runclient"
     getallasync "$pinglocation" ./
+    getallasync "$torpinglocation" ./
     sleep 20
-    echo `pwd`
-    cat *.ping > agg.ping
+    cat *.ping > regular.ping
+    for torfile in *.torping
+    do
+        tail -1 $torfile >> tor.ping
+    done
     mkdir ping
-    mv *.ping ping/
+    rm ping/*
+    mv tor.ping regular.ping ping
+    rm *.ping
+    rm *.torping
+IFS=$' \t\n'
 }
 
 function installAll {
@@ -98,7 +107,7 @@ function installAll {
 }
 
 function killAll {
-    $killeverything
+    $killeverythingnot expanding
     onallasync "$killeverything"
     sleep 10
 }
@@ -161,7 +170,6 @@ function runserver {
     $serverscript $threshold $samplerate
 }
     
-
 readVMs $vmlist 
 command=$1
 

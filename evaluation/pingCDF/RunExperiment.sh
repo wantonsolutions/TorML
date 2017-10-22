@@ -16,7 +16,7 @@ model="models"
 
 #client parameters
 dataset="credit"
-clientcount=1000
+clientcount=25
 latency=0
 goodpercent=100
 tor=true
@@ -26,10 +26,8 @@ diffpriv=0.5
 
 #TODO launch TOR first 
 
-#$cluster "kill"
+$cluster "kill"
 #$cluster "pull"
-$cluster "getpings"
-exit
 $cluster "server" $threshold $samplerate
 #give the server time to warm up
 sleep 5
@@ -38,6 +36,13 @@ $cluster "curator" $curatorname $model
 sleep 5
 
 $cluster "clients" $model $dataset $clientcount $latency $goodpercent $tor $servername $onionservice $diffpriv
+sleep 120
+
+$cluster "kill"
+
+$cluster "getpings"
+
+#TODO graph a dule cdf with the two ping sets
 
 
 
