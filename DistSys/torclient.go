@@ -52,6 +52,7 @@ var (
 	hostServer     string
 	torAddress     string
 	epsilon        float64
+	adversary      bool
 	latency        int
 
 	pyLogModule   *python.PyObject
@@ -204,11 +205,12 @@ func parseArgs() {
 		os.Exit(1)
 	}
 
-	latency, err = strconv.ParseInt(inputargs[8], 10, 64)
+	l, err := strconv.ParseInt(inputargs[8], 10, 64)
 	if err != nil {
 		fmt.Println("Unable to parse latency of %s, the argument must be an integer of ms", inputargs[8])
 		os.Exit(1)
 	}
+	latency = int(l)
 
 	fmt.Println("Done parsing args.")
 }
