@@ -140,7 +140,7 @@ function runclients {
                 ;;
             esac
 
-            ssh $username@$vm -x "$clientscript $modelname $dataset $clientnumber $clientlatency $adversary $tor $servername $onionservice $diffpriv" &
+            ssh $username@$vm -x "$clientscript $modelname $dataset $clientnumber $diffpriv $tor $servername $onionservice $adversary $clientlatency" &
             let "i=$i + 1"
         done
     done

@@ -19,13 +19,6 @@ import (
 	"golang.org/x/net/proxy"
 )
 
-/*
-	An attempt at Tor via TCP.
-*/
-var LOCAL_HOST string = "127.0.0.1:"
-
-//var ONION_HOST 		string = "4255ru2izmph3efw.onion:"
-var ONION_HOST string = "33bwoexeu3sjrxoe.onion:"
 var CONTROL_PORT int = 5005
 
 var TOR_PROXY_CLI string = "127.0.0.1:9050"
@@ -56,9 +49,10 @@ var (
 	isLocal        bool
 	puzzleKey      string
 	pulledGradient []float64
-	torHost        string
+	hostServer     string
 	torAddress     string
 	epsilon        float64
+	latency        int
 
 	pyLogModule   *python.PyObject
 	pyLogInitFunc *python.PyObject
@@ -171,8 +165,8 @@ func heartbeat(logger *govec.GoLog, torDialer proxy.Dialer) {
 func parseArgs() {
 	flag.Parse()
 	inputargs := flag.Args()
-	if len(inputargs) < 4 {
-		fmt.Println("USAGE: go run torclient.go nodeName studyName datasetName epsilon isLocal")
+	if len(inputargs) != 9 {
+		fmt.Println("USAGE: go run torclient.go nodeName studyName datasetName epsilon usetor serverip onionservice adversary latency")
 		os.Exit(1)
 	}
 	name = inputargs[0]
@@ -187,16 +181,33 @@ func parseArgs() {
 		os.Exit(1)
 	}
 
-	torHost = ONION_HOST
-
 	fmt.Printf("Name: %s\n", name)
 	fmt.Printf("Study: %s\n", modelName)
 	fmt.Printf("Dataset: %s\n", datasetName)
 
-	if len(inputargs) > 4 {
+	if inputargs[4] == "false" {
 		fmt.Println("Running locally.")
 		isLocal = true
-		torHost = LOCAL_HOST
+		hostServer = inputargs[5] + ":"
+	} else if inputargs[4] == "true" {
+		fmt.Println("Running over tor")
+		isLocal = false
+		hostServer = inputargs[6] + ":"
+	}
+
+	if inputargs[7] == "false" {
+		adversary = false
+	} else if inputargs[7] == "true" {
+		adversary = true
+	} else {
+		fmt.Printf("Invalid adversary option %s range should be [true/false]", inputargs[7])
+		os.Exit(1)
+	}
+
+	latency, err = strconv.ParseInt(inputargs[8], 10, 64)
+	if err != nil {
+		fmt.Println("Unable to parse latency of %s, the argument must be an integer of ms", inputargs[8])
+		os.Exit(1)
 	}
 
 	fmt.Println("Done parsing args.")
@@ -311,9 +322,9 @@ func getServerConnection(torDialer proxy.Dialer, isGradient bool) (net.Conn, err
 	} else if isGradient {
 		conn, err = net.Dial("tcp", torAddress)
 	} else if torDialer != nil {
-		conn, err = torDialer.Dial("tcp", constructAddress(ONION_HOST, CONTROL_PORT))
+		conn, err = torDialer.Dial("tcp", constructAddress(hostServer, CONTROL_PORT))
 	} else {
-		conn, err = net.Dial("tcp", constructAddress(LOCAL_HOST, CONTROL_PORT))
+		conn, err = net.Dial("tcp", constructAddress(hostServer, CONTROL_PORT))
 	}
 
 	return conn, err
@@ -397,9 +408,9 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 		puzzleKey = solution
 
 		if isLocal {
-			torAddress = constructAddress(LOCAL_HOST, reply)
+			torAddress = constructAddress(hostServer, reply)
 		} else {
-			torAddress = constructAddress(ONION_HOST, reply)
+			torAddress = constructAddress(hostServer, reply)
 		}
 
 		fmt.Printf("Set up connection address %s\n", torAddress)

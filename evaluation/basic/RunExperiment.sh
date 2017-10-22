@@ -22,7 +22,7 @@ goodpercent=100
 tor=true
 servername=198.162.52.147
 onionservice="33bwoexeu3sjrxoe.onion"
-diffpriv=1
+diffpriv=0.5
 
 #TODO launch TOR first 
 
