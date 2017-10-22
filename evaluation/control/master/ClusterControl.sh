@@ -176,6 +176,9 @@ case $command in
 "pull")
     onallasync "$pull"
     ;;
+"permission")
+    onallasync "$permission"
+    ;;
 "clients")
     #The global parameters to the clients command:
     modelname=$2
@@ -199,6 +202,7 @@ case $command in
     samplerate=$3
     runserver $threshold $samplerate
     ;;
+
 *)
     echo "Error unknown cluster command: $command"
     ;;
