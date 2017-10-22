@@ -28,7 +28,7 @@ latency=$9
 
 truedatasetname=$dataset$clientnumber
 
-if [ $adversart = true ];then
+if [ "$adversary" = true ];then
     truedatasetname=$truedatasetname_b
 else
     truedatasetname=$truedatasetname_g
