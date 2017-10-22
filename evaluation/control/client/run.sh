@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 #This script controls the execution of a single client machine
 
@@ -27,15 +27,18 @@ latency=$9
 
 
 truedatasetname=$dataset$clientnumber
+echo "$truedatasetname"
 
 if [ "$adversary" = true ];then
-    truedatasetname=$truedatasetname_b
+    echo "$truedatasetname"
+    truedatasetname="${truedatasetname}_b"
 else
-    truedatasetname=$truedatasetname_g
+    echo "$truedatasetname"
+    truedatasetname="${truedatasetname}_g"
 fi
 
 if [ -e $truedatasetname ];then
-    echo starting client with the $truedataset dataset
+    echo starting client with the $truedatasetname dataset
 else
     echo $truedatasetname does not exist
     exit
