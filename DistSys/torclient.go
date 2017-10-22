@@ -168,6 +168,8 @@ func parseArgs() {
 	inputargs := flag.Args()
 	if len(inputargs) != 9 {
 		fmt.Println("USAGE: go run torclient.go nodeName studyName datasetName epsilon usetor serverip onionservice adversary latency")
+		fmt.Printf("Args = %s", inputargs)
+		fmt.Printf("Len of args = %d", len(inputargs))
 		os.Exit(1)
 	}
 	name = inputargs[0]
