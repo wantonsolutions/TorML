@@ -39,12 +39,12 @@ else
     truedatasetname="${truedatasetname}_g"
 fi
 
-if [ -e $truedatasetname ];then
-    echo starting client with the $truedatasetname dataset
-else
-    echo $truedatasetname does not exist
-    exit
-fi
+#if [ -e $truedatasetname ];then
+#    echo starting client with the $truedatasetname dataset
+#else
+#    echo $truedatasetname does not exist
+#    exit
+#fi
 
 #export go paths
 export GOPATH=$HOME/go
