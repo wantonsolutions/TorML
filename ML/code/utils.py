@@ -47,11 +47,11 @@ def bootstrap(numSets, dataset):
         yboot = y[bootsample]
 
         dataslice = np.hstack((Xboot, yboot.reshape((nn, 1))))
-        np.savetxt("../bootstraps/" + dataset + "_boot_" + 
+        np.savetxt("../data/" + dataset + 
             str(i + 1) + "_g.csv", dataslice, delimiter=",")
 
         dataslice = np.hstack((Xboot, (yboot * -1).reshape((nn, 1))))
-        np.savetxt("../bootstraps/" + dataset + "_boot_" + 
+        np.savetxt("../data/" + dataset + 
             str(i + 1) + "_b.csv", dataslice, delimiter=",")
 
 

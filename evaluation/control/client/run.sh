@@ -26,7 +26,9 @@ latency=$9
 #TODO check that each of these parameters are sane
 
 
-truedatasetname=$dataset$clientnumber
+#calculagte adversaries
+let "datanumber = $clientnumber % 100 + 1 "
+truedatasetname=$dataset$datanumber
 echo "$truedatasetname"
 
 if [ "$adversary" = true ];then
