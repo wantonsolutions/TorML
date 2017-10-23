@@ -6,7 +6,6 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -17,7 +16,6 @@ import (
 	"time"
 
 	"github.com/DistributedClocks/GoVector/govec"
-	"github.com/gonum/matrix/mat64"
 	"github.com/sbinet/go-python"
 )
 
@@ -43,7 +41,6 @@ type ClientState struct {
 	IsComputingLocal bool
 	Weights          []float64
 	OutlierScore     float64
-	Work             []float64
 }
 
 // An active model: list of participants and weights
@@ -66,6 +63,12 @@ type Validator struct {
 }
 
 var (
+
+	// For eval
+	samplingRate     int // How often will we sample? in ms
+	convergThreshold float64
+	lossProgress     []float64
+
 	mutex *sync.Mutex
 
 	myPorts      map[int]bool
@@ -74,14 +77,15 @@ var (
 
 	MULTICAST_RATE float64 = 0.9
 
-	// Kick a client out after 1% of RONI
-	THRESHOLD float64 = -0.01
+	// Kick a client out after 2% of RONI
+	THRESHOLD float64 = -0.1
 
 	// Test Module for python
 	pyTestModule *python.PyObject
 	pyTestFunc   *python.PyObject
 	pyTrainFunc  *python.PyObject
 	pyRoniFunc   *python.PyObject
+	pyPlotFunc   *python.PyObject
 )
 
 /*
@@ -95,37 +99,45 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "Welcome %s!\n\n", r.URL.Path[1:])
 
-	model, exists := myModels[req]
+	_, exists := myModels[req]
 
 	if exists {
 
-		train_error, test_error := testModel(model, "global")
-		fmt.Fprintf(w, "Train Loss: %f\n", train_error)
-		fmt.Fprintf(w, "Test Loss: %f\n", test_error)
+		mutex.Lock()
+		model := myModels[req]
+		trainError, testError := testModel(model, "global")
+		fmt.Fprintf(w, "Train Loss: %f\n", trainError)
+		fmt.Fprintf(w, "Test Loss: %f\n", testError)
+		fmt.Fprintf(w, "Num Clients: %d\n", len(model.Clients))
 
 		for node, clientState := range model.Clients {
+
 			fmt.Fprintf(w, "\n")
-			train_error, test_error = testModel(model, node)
-			fmt.Fprintf(w, "%s iterations: %d\n", node, clientState.NumIterations)
-			fmt.Fprintf(w, "%s validations: %d\n", node, clientState.NumValidations)
-			fmt.Fprintf(w, "%s L2 outlier score: %f\n", node, clientState.OutlierScore)
-			fmt.Fprintf(w, "%s train Loss: %f\n", node, train_error)
-			fmt.Fprintf(w, "%s test Loss: %f\n", node, test_error)
+			trainError, testError = testModel(model, node)
+			fmt.Fprintf(w, "%.5s iterations: %d\n", node, clientState.NumIterations)
+			fmt.Fprintf(w, "%.5s validations: %d\n", node, clientState.NumValidations)
+			fmt.Fprintf(w, "%.5s L2 outlier score: %f\n", node, clientState.OutlierScore)
+			fmt.Fprintf(w, "%.5s train Loss: %f\n", node, trainError)
+			fmt.Fprintf(w, "%.5s test Loss: %f\n", node, testError)
+
 		}
+		mutex.Unlock()
 	}
 
 	if req == "flush" {
 
-		file, err := os.Create("models.csv")
-		checkError(err)
+		file, err := os.Create("modelflush.csv")
 		defer file.Close()
+		checkError(err)
 
 		writer := csv.NewWriter(file)
 		defer writer.Flush()
 
+		mutex.Lock()
 		for _, model := range myModels {
 
 			st := strings.Fields(strings.Trim(fmt.Sprint(model.GlobalWeights), "[]"))
+			st = append(st, "global")
 			writer.Write(st)
 
 			for node, modelState := range model.Clients {
@@ -135,31 +147,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		mutex.Unlock()
 		fmt.Fprintf(w, "Model flushed.")
 
-	} else if req == "workflush" {
+	} else if req == "lossflush" {
 
-		for _, model := range myModels {
-
-			for node, modelState := range model.Clients {
-
-				file, err := os.Create("work_" + node + ".csv")
-				checkError(err)
-				defer file.Close()
-
-				writer := csv.NewWriter(file)
-				defer writer.Flush()
-
-				for _, update := range modelState.Work {
-
-					st := strings.Fields(strings.Trim(fmt.Sprint(update), "[]"))
-					writer.Write(st)
-
-				}
-			}
-		}
-
-		fmt.Fprintf(w, "Model flushed.")
+		lossFlush()
+		fmt.Fprintf(w, "Progress flushed.")
 
 	}
 }
@@ -194,7 +188,34 @@ func pyInit() {
 	pyTrainFunc = pyTestModule.GetAttrString("train_error")
 	pyTestFunc = pyTestModule.GetAttrString("test_error")
 	pyRoniFunc = pyTestModule.GetAttrString("roni")
+	pyPlotFunc = pyTestModule.GetAttrString("plot")
 
+}
+
+func parseArgs() {
+	args := os.Args[1:]
+	if len(args) != 2 {
+		fmt.Println("Usage: go run torserver.go threshold samplerate")
+		os.Exit(1)
+	}
+	samplerate, err := strconv.Atoi(args[0])
+	if err != nil {
+		fmt.Println("Unable to parse samplerate of %s. Err:%s", args[0], err.Error())
+		os.Exit(1)
+	} else if samplerate < 0 {
+		fmt.Println("Samplerate of %d is less than zero, please use a positive sample rate", samplerate)
+		os.Exit(1)
+	}
+
+	convergThreshold, err := strconv.ParseFloat(args[1], 64)
+	if err != nil {
+		fmt.Printf("Unable to parse convergance threhold of %s Err: %s", args[1], err.Error())
+		os.Exit(1)
+	} else if convergThreshold > 1.0 || convergThreshold < 0 {
+		fmt.Printf("convergance threshold of %f not in the range (0,1)", convergthreshold)
+		os.Exit(1)
+	}
+	fmt.Println("Arguments Parsed")
 }
 
 func main() {
@@ -208,6 +229,12 @@ func main() {
 	myPorts = make(map[int]bool)
 	myModels = make(map[string]Model)
 	myValidators = make(map[string]Validator)
+
+	// Measured in ms.
+	samplingRate = 5000
+
+	// What loss until you claim convergence?
+	convergThreshold = 0.05
 
 	// Make ports 6000 to 6010 available
 	//TODO modifiy for extra VM's
@@ -224,8 +251,75 @@ func main() {
 	go runRouter("0.0.0.0:5005")
 	//go runRouter(":5005")
 
+	go runSampler()
+
 	// Keeps server running
 	select {}
+}
+
+func runSampler() {
+
+	converged := false
+
+	for !converged {
+
+		time.Sleep(time.Duration(samplingRate) * time.Millisecond)
+
+		_, exists := myModels["study"]
+
+		if exists {
+
+			// hardcoded
+			mutex.Lock()
+			model := myModels["study"]
+			trainError, _ := testModel(model, "global")
+
+			// Add the new error value at the back
+			lossProgress = append(lossProgress, trainError)
+			mutex.Unlock()
+
+			if trainError < convergThreshold {
+				converged = true
+			}
+
+		}
+
+	}
+
+	fmt.Println("I HAVE.... CONVERGENCE!")
+
+	// Write out the final value
+	lossFlush()
+
+}
+
+func lossFlush() {
+
+	file, err := os.Create("lossflush.csv")
+	defer file.Close()
+	checkError(err)
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	mutex.Lock()
+	st := strings.Fields(strings.Trim(fmt.Sprint(lossProgress), "[]"))
+	writer.Write(st)
+
+	/*
+
+		UNUSED GO PYTHON CODE. IT DOESNT WORK
+		plotArray := python.PyList_New(len(lossProgress))
+
+		for i := 0; i < len(lossProgress); i++ {
+			python.PyList_SetItem(plotArray, i, python.PyFloat_FromDouble(lossProgress[i]))
+		}
+
+		isPlotted := pyPlotFunc.CallFunction(plotArray)
+		fmt.Println(python.PyFloat_AsDouble(isPlotted))*/
+
+	mutex.Unlock()
+
 }
 
 // Sets up the TCP connection, and attaches GoVector.
@@ -507,7 +601,7 @@ func processJoin(modelId string, givenKey string, numFeatures int) bool {
 
 				// Add node
 				theModel.Clients[givenKey] =
-					ClientState{0, 0, false, newRandomModel(numFeatures), 0, make([]float64, 0)}
+					ClientState{0, 0, false, newRandomModel(numFeatures), 0}
 				fmt.Printf("Joined %.5s in model %s \n", givenKey, modelId)
 
 				// Write the solution
@@ -573,7 +667,6 @@ func gradientUpdate(puzzleKey string, modelId string, deltas []float64) bool {
 					for node, roni := range scoreMap {
 						roniClientState := theModel.Clients[node]
 						roniClientState.OutlierScore += roni
-						roniClientState.Work = append(roniClientState.Work, roni)
 						theModel.Clients[node] = roniClientState
 
 						if roniClientState.OutlierScore < THRESHOLD {
@@ -734,18 +827,6 @@ func newRandomModel(numFeatures int) []float64 {
 	}
 
 	return model
-}
-
-func FindEucDistance(vectorX *mat64.Dense, vectorY *mat64.Dense) float64 {
-
-	// Finds X-Y
-	distanceVec := mat64.NewDense(0, 0, nil)
-	distanceVec.Sub(vectorX, vectorY)
-
-	result := mat64.NewDense(0, 0, nil)
-	result.MulElem(distanceVec, distanceVec)
-
-	return math.Sqrt(mat64.Sum(result))
 }
 
 // Error checking function
