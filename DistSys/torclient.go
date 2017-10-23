@@ -96,11 +96,12 @@ func main() {
 	pyInit(datasetName)
 
 	fmt.Printf("Joining model %s \n", modelName)
-	joined := sendJoinMessage(logger, torDialer)
-
-	if joined == 0 {
-		fmt.Println("Could not join.")
-		return
+	joined := 0
+	for joined == 0 {
+		joined := sendJoinMessage(logger, torDialer)
+		if joined == 0 {
+			fmt.Println("Could not join.")
+		}
 	}
 
 	TorPing(logger, torDialer)
