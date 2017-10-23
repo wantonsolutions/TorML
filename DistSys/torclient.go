@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"math"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -101,7 +102,7 @@ func main() {
 		joined = sendJoinMessage(logger, torDialer)
 		if joined == 0 {
 			fmt.Println("Could not join.")
-			time.Sleep(1 * time.Second)
+			time.Sleep(time.Second * time.Duration((rand.Int() % 60)))
 		}
 	}
 
