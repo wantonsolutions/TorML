@@ -338,8 +338,12 @@ func getServerConnection(torDialer proxy.Dialer, isGradient bool) (net.Conn, err
 
 func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 
+	failedconnect = 0
 	conn, err := getServerConnection(torDialer, false)
-	checkError(err)
+	if err != nil {
+		fmt.Println("Failed to connect to server: %s", err.Error())
+		return failedconnect
+	}
 
 	fmt.Println("TOR Dial Success!")
 
@@ -354,11 +358,17 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 	outBuf := logger.PrepareSend("Sending packet to torserver", msg)
 
 	_, errWrite := conn.Write(outBuf)
-	checkError(errWrite)
+	if errWrite != nil {
+		fmt.Println("Failed to write to server: %s", errWrite.Error())
+		return failedconnect
+	}
 
 	inBuf := make([]byte, 131072)
 	n, errRead := conn.Read(inBuf)
-	checkError(errRead)
+	if errRead != nil {
+		fmt.Println("Failed to read from server: %s", errWrite.Error())
+		return failedconnect
+	}
 
 	var puzzle string
 	var solution string
@@ -389,7 +399,10 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 	}
 
 	conn, err = getServerConnection(torDialer, false)
-	checkError(err)
+	if err != nil {
+		fmt.Println("Failed to connect to server: %s", err.Error())
+		return failedconnect
+	}
 
 	msg.Type = "solve"
 	msg.Key = solution
@@ -398,11 +411,17 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 
 	outBuf = logger.PrepareSend("Sending puzzle solution", msg)
 	_, errWrite = conn.Write(outBuf)
-	checkError(errWrite)
+	if errWrite != nil {
+		fmt.Println("Failed to write to server: %s", errWrite.Error())
+		return failedconnect
+	}
 
 	inBuf = make([]byte, 131072)
 	n, errRead = conn.Read(inBuf)
-	checkError(errRead)
+	if errRead != nil {
+		fmt.Println("Failed to read from server: %s", errWrite.Error())
+		return failedconnect
+	}
 
 	var reply int
 	logger.UnpackReceive("Received Message from server", inBuf[0:n], &reply)
@@ -471,7 +490,7 @@ func constructAddress(host string, port int) string {
 func checkError(err error) {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Fatal error: %s", err.Error())
-		//os.Exit(1)
+		os.Exit(1)
 	}
 }
 
@@ -479,7 +498,10 @@ func checkError(err error) {
 func TorPing(logger *govec.GoLog, torDialer proxy.Dialer) {
 	conn, err := getServerConnection(torDialer, false)
 	defer conn.Close()
-	checkError(err)
+	if err != nil {
+		fmt.Printf("Unable to get ping connection srew it. Err:%s", err.Error())
+		return
+	}
 	fmt.Println("TOR Dial Success!")
 
 	fmt.Println("Collecting Ping")
@@ -496,7 +518,10 @@ func TorPing(logger *govec.GoLog, torDialer proxy.Dialer) {
 	conn.Write(outBuf)
 	start := time.Now()
 	n, errRead := conn.Read(inBuf)
-	checkError(errRead)
+	if err != nil {
+		fmt.Println("unable to read ping, screw it. Err:%s", err.Error())
+		return
+	}
 	end := time.Now()
 	logger.UnpackReceive("Receving ping?", inBuf[0:n], &msg)
 	hname, _ := os.Hostname()
