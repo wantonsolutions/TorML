@@ -146,7 +146,7 @@ func heartbeat(logger *govec.GoLog, torDialer proxy.Dialer) {
 			continue
 		}
 
-		inBuf := make([]byte, 512)
+		inBuf := make([]byte, 131072)
 		n, errRead := conn.Read(inBuf)
 		if errRead != nil {
 			fmt.Println("Got a Conn Read failure, retrying...")
@@ -292,7 +292,7 @@ func sendGradMessage(logger *govec.GoLog,
 			continue
 		}
 
-		inBuf := make([]byte, 2048)
+		inBuf := make([]byte, 131072)
 		n, errRead := conn.Read(inBuf)
 		if errRead != nil {
 			fmt.Println("Got a reply read failure, retrying...")
@@ -356,7 +356,7 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 	_, errWrite := conn.Write(outBuf)
 	checkError(errWrite)
 
-	inBuf := make([]byte, 512)
+	inBuf := make([]byte, 131072)
 	n, errRead := conn.Read(inBuf)
 	checkError(errRead)
 
@@ -400,7 +400,7 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 	_, errWrite = conn.Write(outBuf)
 	checkError(errWrite)
 
-	inBuf = make([]byte, 512)
+	inBuf = make([]byte, 131072)
 	n, errRead = conn.Read(inBuf)
 	checkError(errRead)
 
@@ -491,7 +491,7 @@ func TorPing(logger *govec.GoLog, torDialer proxy.Dialer) {
 	msg.NumFeatures = 0
 	msg.MinClients = 0
 
-	inBuf := make([]byte, 512)
+	inBuf := make([]byte, 131072)
 	outBuf := logger.PrepareSend("Sending ping", msg)
 	conn.Write(outBuf)
 	start := time.Now()
