@@ -368,7 +368,7 @@ func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 	inBuf := make([]byte, 131072)
 	n, errRead := conn.Read(inBuf)
 	if errRead != nil {
-		fmt.Println("Failed to read from server: %s", errWrite.Error())
+		fmt.Println("Failed to read from server: %s", errRead.Error())
 		return failedconnect
 	}
 

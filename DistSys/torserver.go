@@ -92,15 +92,13 @@ var (
 	Executes when the .onion domain is accessed via the TorBrowser
 */
 func handler(w http.ResponseWriter, r *http.Request) {
-	mutex.Lock()
-	defer mutex.Unlock()
 
 	req := r.URL.Path[1:]
 
 	fmt.Fprintf(w, "Welcome %s!\n\n", r.URL.Path[1:])
 
 	_, exists := myModels[req]
-
+	fmt.Printf("Answering Web Query for %s\n", r.URL.Path[1:])
 	if exists {
 
 		mutex.Lock()
@@ -156,6 +154,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Progress flushed.")
 
 	}
+	fmt.Println("Query Serviced")
 }
 
 func httpHandler() {
@@ -198,24 +197,29 @@ func parseArgs() {
 		fmt.Println("Usage: go run torserver.go threshold samplerate")
 		os.Exit(1)
 	}
-	samplerate, err := strconv.Atoi(args[0])
+	var err error
+
+	convergThreshold, err = strconv.ParseFloat(args[0], 64)
 	if err != nil {
-		fmt.Println("Unable to parse samplerate of %s. Err:%s", args[0], err.Error())
+		fmt.Printf("Unable to parse convergance threhold of %s Err: %s\n", args[1], err.Error())
 		os.Exit(1)
-	} else if samplerate < 0 {
-		fmt.Println("Samplerate of %d is less than zero, please use a positive sample rate", samplerate)
+	} else if convergThreshold > 1.0 || convergThreshold < 0 {
+		fmt.Printf("convergance threshold of %f not in the range (0,1)\n", convergThreshold)
 		os.Exit(1)
 	}
 
-	convergThreshold, err := strconv.ParseFloat(args[1], 64)
+	samplingRate, err = strconv.Atoi(args[1])
 	if err != nil {
-		fmt.Printf("Unable to parse convergance threhold of %s Err: %s", args[1], err.Error())
+		fmt.Printf("Unable to parse samplerate of %s. Err:%s\n", args[0], err.Error())
 		os.Exit(1)
-	} else if convergThreshold > 1.0 || convergThreshold < 0 {
-		fmt.Printf("convergance threshold of %f not in the range (0,1)", convergthreshold)
+	} else if samplingRate < 0 {
+		fmt.Printf("Samplerate of %d is less than zero, please use a positive sample rate\n", samplingRate)
 		os.Exit(1)
 	}
+
 	fmt.Println("Arguments Parsed")
+	fmt.Printf("Running server with convergance: %2.3f and samplerate %dms\n", convergThreshold, samplingRate)
+
 }
 
 func main() {
@@ -223,6 +227,7 @@ func main() {
 	fmt.Println("Launching server...")
 
 	pyInit()
+	parseArgs()
 
 	mutex = &sync.Mutex{}
 
@@ -230,16 +235,10 @@ func main() {
 	myModels = make(map[string]Model)
 	myValidators = make(map[string]Validator)
 
-	// Measured in ms.
-	samplingRate = 5000
-
-	// What loss until you claim convergence?
-	convergThreshold = 0.05
-
 	// Make ports 6000 to 6010 available
 	//TODO modifiy for extra VM's
 	// #Random
-	for i := 6000; i <= 6100; i++ {
+	for i := 7001; i <= 8000; i++ {
 		myPorts[i] = false
 	}
 
@@ -260,7 +259,6 @@ func main() {
 func runSampler() {
 
 	converged := false
-
 	for !converged {
 
 		time.Sleep(time.Duration(samplingRate) * time.Millisecond)
@@ -294,6 +292,7 @@ func runSampler() {
 }
 
 func lossFlush() {
+	fmt.Println("lossflush")
 
 	file, err := os.Create("lossflush.csv")
 	defer file.Close()
@@ -338,13 +337,14 @@ func runRouter(address string) {
 
 	for {
 
-		buf := make([]byte, 2048)
-		outBuf := make([]byte, 2048)
+		buf := make([]byte, 131072)
+		outBuf := make([]byte, 131072)
 		conn, err := ln.Accept()
 		checkError(err)
 
 		// Get the message from client
 		n, _ := conn.Read(buf)
+		fmt.Printf("Read message of size %d\n", n)
 
 		var inData MessageData
 		Logger.UnpackReceive("Received Message From Client", buf[0:n], &inData)
@@ -357,7 +357,7 @@ func runRouter(address string) {
 
 func processControlMsg(inData MessageData, Logger *govec.GoLog) []byte {
 
-	outBuf := make([]byte, 2048)
+	outBuf := make([]byte, 131072)
 	var ok bool
 
 	switch inData.Type {
@@ -377,9 +377,10 @@ func processControlMsg(inData MessageData, Logger *govec.GoLog) []byte {
 		}
 
 	case "solve":
-		ok = processJoin(inData.ModelId, inData.Key, inData.NumFeatures)
+		mutex.Lock()
+		defer mutex.Unlock()
+		port, address, ok := processJoin(inData.ModelId, inData.Key, inData.NumFeatures)
 		if ok {
-			address, port := getFreeAddress()
 			go gradientWorker(inData.SourceNode, address, Logger)
 			outBuf = Logger.PrepareSend("Replying", port)
 		} else {
@@ -416,8 +417,8 @@ func gradientWorker(nodeId string,
 	ln, err := net.ListenTCP("tcp", myaddr)
 	checkError(err)
 
-	buf := make([]byte, 2048)
-	outBuf := make([]byte, 2048)
+	buf := make([]byte, 131072)
+	outBuf := make([]byte, 131072)
 	fmt.Printf("Listening for TCP....\n")
 
 	for {
@@ -560,30 +561,26 @@ func makePuzzle(modelId string) string {
 }
 
 // numFeature is just bootleg schema validation
-func processJoin(modelId string, givenKey string, numFeatures int) bool {
-
+func processJoin(modelId string, givenKey string, numFeatures int) (int, string, bool) {
 	fmt.Println("Got attempted puzzle solution")
 
 	// check if model exists
 	_, exists := myModels[modelId]
 	if !exists {
 		fmt.Printf("Rejected a fake join for model: %s\n", modelId)
-		return false
+		return 0, "", false
 	}
 
-	mutex.Lock()
 	theModel := myModels[modelId]
 	if numFeatures != theModel.NumFeatures {
 		fmt.Printf("Rejected an incorrect numFeatures for model: %s\n", modelId)
-		mutex.Unlock()
-		return false
+		return 0, "", false
 	}
 
 	_, exists = theModel.Clients[givenKey]
 	if exists {
 		fmt.Printf("Node %.5s is already joined in model: %s \n", givenKey, modelId)
-		mutex.Unlock()
-		return false
+		return 0, "", false
 	}
 
 	// Verify the solution
@@ -599,24 +596,27 @@ func processJoin(modelId string, givenKey string, numFeatures int) bool {
 
 			if strings.HasSuffix(hashString, "0000") {
 
-				// Add node
-				theModel.Clients[givenKey] =
-					ClientState{0, 0, false, newRandomModel(numFeatures), 0}
-				fmt.Printf("Joined %.5s in model %s \n", givenKey, modelId)
+				address, port := getFreeAddress()
+				if port == 0 {
+					return 0, "", false
+				} else {
+					// Add node
+					theModel.Clients[givenKey] =
+						ClientState{0, 0, false, newRandomModel(numFeatures), 0}
+					fmt.Printf("Joined %.5s in model %s \n", givenKey, modelId)
 
-				// Write the solution
-				theModel.Puzzles[lock] = givenKey
-				myModels[modelId] = theModel
-				mutex.Unlock()
+					// Write the solution
+					theModel.Puzzles[lock] = givenKey
+					myModels[modelId] = theModel
 
-				return true
+					return port, address, true
+				}
 
 			}
 		}
 	}
 
-	mutex.Unlock()
-	return false
+	return 0, "", false
 }
 
 func gradientUpdate(puzzleKey string, modelId string, deltas []float64) bool {
@@ -787,14 +787,12 @@ func getFreeAddress() (string, int) {
 
 	var buffer bytes.Buffer
 
-	mutex.Lock()
 	for port := range myPorts {
 
 		if !myPorts[port] {
 
 			// Mark port as taken
 			myPorts[port] = true
-			mutex.Unlock()
 
 			// Construct the address string
 			buffer.WriteString("127.0.0.1:")
@@ -803,7 +801,6 @@ func getFreeAddress() (string, int) {
 		}
 	}
 
-	mutex.Unlock()
 	return "", 0
 }
 

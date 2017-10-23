@@ -93,10 +93,6 @@ def privateFun(theta, ww, batch_size=0):
 
     f, g = funObj(ww, X[idx, :], y[idx], batch_size)
 
-    # Batch averaging
-    if batch_size > 0 and batch_size < nn:
-        g = g / batch_size
-
     # AdaGrad
     # global hist_grad
     # hist_grad += g**2
