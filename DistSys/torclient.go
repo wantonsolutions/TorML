@@ -98,7 +98,7 @@ func main() {
 	fmt.Printf("Joining model %s \n", modelName)
 	joined := 0
 	for joined == 0 {
-		joined := sendJoinMessage(logger, torDialer)
+		joined = sendJoinMessage(logger, torDialer)
 		if joined == 0 {
 			fmt.Println("Could not join.")
 		}
