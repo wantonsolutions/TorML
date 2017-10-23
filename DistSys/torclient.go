@@ -101,7 +101,7 @@ func main() {
 		joined = sendJoinMessage(logger, torDialer)
 		if joined == 0 {
 			fmt.Println("Could not join.")
-			time.Sleep(1000 * time.Millisecond)
+			time.Sleep(1 * time.Second)
 		}
 	}
 
