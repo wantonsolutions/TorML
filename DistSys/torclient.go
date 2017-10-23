@@ -338,7 +338,7 @@ func getServerConnection(torDialer proxy.Dialer, isGradient bool) (net.Conn, err
 
 func sendJoinMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 
-	failedconnect = 0
+	var failedconnect = 0
 	conn, err := getServerConnection(torDialer, false)
 	if err != nil {
 		fmt.Println("Failed to connect to server: %s", err.Error())
@@ -518,7 +518,7 @@ func TorPing(logger *govec.GoLog, torDialer proxy.Dialer) {
 	conn.Write(outBuf)
 	start := time.Now()
 	n, errRead := conn.Read(inBuf)
-	if err != nil {
+	if errRead != nil {
 		fmt.Println("unable to read ping, screw it. Err:%s", err.Error())
 		return
 	}
