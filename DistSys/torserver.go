@@ -75,10 +75,11 @@ var (
 	myModels     map[string]Model
 	myValidators map[string]Validator
 
-	MULTICAST_RATE float64 = 1.1
+	isLocal        bool    = false
+	MULTICAST_RATE float64 = 0.95
 
 	// Kick a client out after 2% of RONI
-	THRESHOLD float64 = -0.1
+	THRESHOLD float64 = -0.02
 
 	// Test Module for python
 	pyTestModule *python.PyObject
@@ -811,7 +812,11 @@ func getFreeAddress() (string, int) {
 			myPorts[port] = true
 
 			// Construct the address string
-			buffer.WriteString("127.0.0.1:")
+			if isLocal {
+				buffer.WriteString("198.162.52.147:")
+			} else {
+				buffer.WriteString("127.0.0.1:")
+			}
 			buffer.WriteString(strconv.Itoa(port))
 			return buffer.String(), port
 		}
