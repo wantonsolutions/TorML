@@ -75,7 +75,7 @@ var (
 	myModels     map[string]Model
 	myValidators map[string]Validator
 
-	MULTICAST_RATE float64 = 0.9
+	MULTICAST_RATE float64 = 1.1
 
 	// Kick a client out after 2% of RONI
 	THRESHOLD float64 = -0.1
@@ -258,6 +258,22 @@ func main() {
 
 func runSampler() {
 
+	modelId := "study"
+	started := false
+	for !started {
+
+		time.Sleep(time.Duration(samplingRate) * time.Millisecond)
+
+		mutex.Lock()
+		_, exists := myModels[modelId]
+		enough := len(myModels[modelId].Clients) >= myModels[modelId].MinClients
+		if exists && enough {
+			started = true
+		}
+		mutex.Unlock()
+	}
+
+	// Actually start sampling
 	converged := false
 	for !converged {
 

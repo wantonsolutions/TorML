@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 
 	"github.com/DistributedClocks/GoVector/govec"
 	"golang.org/x/net/proxy"
@@ -17,9 +18,10 @@ var TOR_PROXY_CLI string = "127.0.0.1:9050"
 var TOR_PROXY_BROWSER string = "127.0.0.1:9150"
 
 var (
-	name      string
-	modelName string
-	isLocal   bool
+	name       string
+	modelName  string
+	isLocal    bool
+	minClients int
 )
 
 type MessageData struct {
@@ -43,15 +45,19 @@ func main() {
 func parseArgs() {
 	flag.Parse()
 	inputargs := flag.Args()
-	if len(inputargs) < 2 {
-		fmt.Println("USAGE: go run torcurator.go curatorName modelName")
+	if len(inputargs) < 3 {
+		fmt.Println("USAGE: go run torcurator.go curatorName modelName minclients")
 		os.Exit(1)
 	}
 
+	var err error
 	name = inputargs[0]
 	modelName = inputargs[1]
+	minClients, err = strconv.Atoi(inputargs[2])
 
-	if len(inputargs) > 2 {
+	checkError(err)
+
+	if len(inputargs) > 3 {
 		fmt.Println("Running locally.")
 		isLocal = true
 	}
@@ -100,7 +106,7 @@ func sendCurateMessage(logger *govec.GoLog, torDialer proxy.Dialer) int {
 	msg.ModelId = modelName
 	msg.Key = ""
 	msg.NumFeatures = 25
-	msg.MinClients = 2
+	msg.MinClients = minClients
 
 	fmt.Println(msg)
 	outBuf := logger.PrepareSend("Sending packet to torserver", msg)
